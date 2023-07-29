@@ -25,6 +25,7 @@
 
 
 // BEGIN STEPPER VARIABLES
+// Common type definitions for all gauges
 typedef enum {
   STEPPER_HOMING_AUTO,
   STEPPER_HOMING_MANUAL,
@@ -32,16 +33,16 @@ typedef enum {
   STEPPER_OPERATING
 } StepperMode;
 
+// replicate the following lines for brake gauge
 AccelStepper flapsGauge(
   AccelStepper::MotorInterfaceType::FULL4WIRE, 
   FLAPSGAUGE_STEPPER_PIN_1, 
   FLAPSGAUGE_STEPPER_PIN_2, 
   FLAPSGAUGE_STEPPER_PIN_3, 
   FLAPSGAUGE_STEPPER_PIN_4);
-
-StepperMode stepperMode;
+StepperMode flapsGaugeStepperMode;
 FlightSimFloat flapsGaugePosition;
-elapsedMillis stepperHomeManualWait;
+elapsedMillis flapsGaugeStepperHomeManualWait;
 // END STEPPER VARIABLES
 
 void setup() {
@@ -54,10 +55,10 @@ void setup() {
   flapsGauge.setAcceleration(STEPPER_ACCELERATION);
 
 #ifdef FLAPSGAUGE_AUTO_HOME_PIN
-  stepperMode = STEPPER_HOMING;
+  flapsGaugeStepperMode = STEPPER_HOMING_AUTO;
   pinMode(FLAPSGAUGE_AUTO_HOME_PIN, INPUT_PULLUP);
 #else
-  stepperMode = STEPPER_OPERATING;
+  flapsGaugeStepperMode = STEPPER_OPERATING;
 #endif
 
 #ifdef FLAPSGAUGE_MANUAL_HOME_PIN
@@ -70,49 +71,52 @@ void setup() {
 void loop() {
   FlightSim.update();
 
-  // Stepper code
-  if (stepperMode == STEPPER_HOMING_AUTO) {
-    flapsGauge.setSpeed(STEPPER_HOMING_SPEED);
-    flapsGauge.runSpeed();
-#ifdef FLAPSGAUGE_AUTO_HOME_PIN
-    if (digitalReadFast(FLAPSGAUGE_AUTO_HOME_PIN) == FLAPSGAUGE_AUTO_HOME_LEVEL) {
-      flapsGauge.setCurrentPosition(0);
-      stepperMode = STEPPER_OPERATING;
-    }
-#endif
-  } else if (stepperMode == STEPPER_HOMING_MANUAL)  {
-    flapsGauge.setSpeed(STEPPER_HOMING_SPEED);
-    flapsGauge.runSpeed();
-#ifdef FLAPSGAUGE_MANUAL_HOME_PIN
-    if (digitalReadFast(FLAPSGAUGE_MANUAL_HOME_PIN) != FLAPSGAUGE_MANUAL_HOME_LEVEL) {
-      flapsGauge.setCurrentPosition(0);
-      stepperMode = STEPPER_HOMING_MANUAL_WAIT;
-      stepperHomeManualWait = 0;
-    }
-#endif
-  } 
-  else if (stepperMode == STEPPER_HOMING_MANUAL)  {
-    if (stepperHomeManualWait >= FLAPSGAUGE_MANUAL_HOME_WAIT_TIME) {
-      stepperMode = STEPPER_OPERATING;
-    }
-#ifdef FLAPSGAUGE_MANUAL_HOME_PIN
-    if (digitalReadFast(FLAPSGAUGE_MANUAL_HOME_PIN) != FLAPSGAUGE_MANUAL_HOME_LEVEL) {
-      flapsGauge.setCurrentPosition(0);
-      stepperMode = STEPPER_HOMING_MANUAL_WAIT;
-      stepperHomeManualWait = 0;
-    }
-#endif
-  } 
-  else if (stepperMode == STEPPER_OPERATING) {
+  // BEGIN STEPPER LOOP CODE
+  if (flapsGaugeStepperMode == STEPPER_OPERATING) {
 #ifdef FLAPSGAUGE_MANUAL_HOME_PIN
     if (digitalReadFast(FLAPSGAUGE_MANUAL_HOME_PIN) == FLAPSGAUGE_MANUAL_HOME_LEVEL) {
-      stepperMode = STEPPER_HOMING_MANUAL;
+      flapsGaugeStepperMode = STEPPER_HOMING_MANUAL;
     }
 #endif
     float flapsAngle = flapsGaugePosition * FLAPSGAUGE_ANGLE;
     int stepperPosition = flapsAngle / 360.0 * FLAPSGAUGE_STEPS_PER_REVOLUTION;
     flapsGauge.moveTo(stepperPosition); 
     flapsGauge.run();
-  }
-
+  } else if (flapsGaugeStepperMode == STEPPER_HOMING_AUTO) {
+    // turn stepper
+    flapsGauge.setSpeed(STEPPER_HOMING_SPEED);
+    flapsGauge.runSpeed();
+#ifdef FLAPSGAUGE_AUTO_HOME_PIN
+    if (digitalReadFast(FLAPSGAUGE_AUTO_HOME_PIN) == FLAPSGAUGE_AUTO_HOME_LEVEL) {
+      // home position reached, switch to normal operation mode
+      flapsGauge.setCurrentPosition(0);
+      stepperMode = STEPPER_OPERATING;
+    }
+#endif
+  } else if (flapsGaugeStepperMode == STEPPER_HOMING_MANUAL)  {
+    // turn stepper
+    flapsGauge.setSpeed(STEPPER_HOMING_SPEED);
+    flapsGauge.runSpeed();
+#ifdef FLAPSGAUGE_MANUAL_HOME_PIN
+    if (digitalReadFast(FLAPSGAUGE_MANUAL_HOME_PIN) != FLAPSGAUGE_MANUAL_HOME_LEVEL) {
+      // go into waiting mode before switching to operational mode
+      flapsGaugeStepperMode = STEPPER_HOMING_MANUAL_WAIT;
+      flapsGaugeStepperHomeManualWait = 0;
+    }
+#endif
+  } 
+  else if (flapsGaugeStepperMode == STEPPER_HOMING_MANUAL_WAIT)  {
+    if (flapsGaugeStepperHomeManualWait >= FLAPSGAUGE_MANUAL_HOME_WAIT_TIME) {
+      // timeout expired, go to normal operation mode
+      flapsGaugeStepperMode = STEPPER_OPERATING;
+      flapsGauge.setCurrentPosition(0);
+    }
+#ifdef FLAPSGAUGE_MANUAL_HOME_PIN
+    if (digitalReadFast(FLAPSGAUGE_MANUAL_HOME_PIN) == FLAPSGAUGE_MANUAL_HOME_LEVEL) {
+      // back to manual homing mode
+      flapsGaugeStepperMode = STEPPER_HOMING_MANUAL;
+    }
+#endif
+  } 
+  // END STEPPER LOOP CODE
 }
