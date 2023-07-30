@@ -4,7 +4,7 @@ FlightSimGauge::FlightSimGauge(const char* gaugeName, AccelStepper &gaugeStepper
     name(gaugeName),
     stepper(gaugeStepper)
  {
-    mode = GAUGE_OPERATING;
+    mode=GAUGE_OPERATING;
     timer = 0;
     debugMode = false;
     manualHomingPin = -1;
@@ -22,7 +22,7 @@ void FlightSimGauge::setManualHomingPinAndSpeed(int16_t pinNumber, uint8_t activ
     this->homingSpeed = homingSpeed;
     autoHomingPin = -1;
     isLimitHoming = false;
-    mode = GAUGE_OPERATING;
+    mode=GAUGE_OPERATING;
     if (activeLevel == LOW) {
         pinMode(pinNumber, INPUT_PULLUP);
     } else if (activeLevel == HIGH) {
@@ -40,7 +40,7 @@ void FlightSimGauge::setAutoHomingPinAndSpeed(int16_t pinNumber, uint8_t activeL
     homingLevel = activeLevel;
     manualHomingPin = -1;
     isLimitHoming = false;
-    mode = GAUGE_HOMING_AUTO;
+    mode=GAUGE_HOMING_AUTO;
     stepper.setSpeed(homingSpeed);
     if (activeLevel == LOW) {
         pinMode(pinNumber, INPUT_PULLUP);
@@ -65,7 +65,7 @@ void FlightSimGauge::loop() {
             stepper.run();
             if (manualHomingPin != -1) {
                 if (digitalReadFast(manualHomingPin) == homingLevel) {
-                    mode = GAUGE_HOMING_WAIT_PRESS;
+                    setMode(GAUGE_HOMING_WAIT_PRESS);
                     timer = 0;
                 }
             }
@@ -73,11 +73,11 @@ void FlightSimGauge::loop() {
 
         case GAUGE_HOMING_WAIT_PRESS:
             if (digitalReadFast(manualHomingPin) != homingLevel) {
-                mode = GAUGE_OPERATING;
+                setMode(GAUGE_OPERATING);
                 break;
             }
             if (timer > manualHomingPressDelay) {
-                mode = GAUGE_HOMING_MANUAL;
+                setMode(GAUGE_HOMING_MANUAL);
                 stepper.setSpeed(homingSpeed);
             }
             break;
@@ -85,7 +85,7 @@ void FlightSimGauge::loop() {
         case GAUGE_HOMING_MANUAL:
             if (digitalReadFast(manualHomingPin) != homingLevel) {
                 timer = 0;
-                mode = GAUGE_HOMING_WAIT_RELEASE;
+                setMode(GAUGE_HOMING_WAIT_RELEASE);
                 break;
             }
             stepper.runSpeed();
@@ -93,18 +93,18 @@ void FlightSimGauge::loop() {
 
         case GAUGE_HOMING_WAIT_RELEASE:
             if (digitalReadFast(manualHomingPin) == homingLevel) {
-                mode = GAUGE_HOMING_MANUAL;
+                setMode(GAUGE_HOMING_MANUAL);
             }
             if (timer > manualHomingReleaseDelay) {
                 stepper.setCurrentPosition(homingPosition);
-                mode = GAUGE_OPERATING;
+                setMode(GAUGE_OPERATING);
             }
             break;
 
         case GAUGE_HOMING_AUTO:
             if (digitalReadFast(autoHomingPin) == homingLevel) {
                 stepper.setCurrentPosition(homingPosition);
-                mode = GAUGE_OPERATING;
+                setMode(GAUGE_OPERATING);
                 break;
             }
             stepper.runSpeed();
@@ -113,7 +113,7 @@ void FlightSimGauge::loop() {
         case GAUGE_HOMING_LIMIT:
             if (stepper.currentPosition() == limitHomingPosition) {
                 stepper.setCurrentPosition(homingPosition);
-                mode = GAUGE_OPERATING;
+                setMode(GAUGE_OPERATING);
                 break;
             }
             stepper.runSpeed();
